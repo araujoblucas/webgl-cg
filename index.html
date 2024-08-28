@@ -75,6 +75,27 @@ uniform vec3 u_reverseLightDirection;
 
 out vec4 outColor;
 
+float sampleShadow(vec3 coord) {
+    float shadow = 0.0;
+    float samples = 0.0;
+    float offset = 1.0 / 512.0;
+    float sampleArea = 15.5;
+
+    for (float y = -sampleArea; y <= sampleArea; y++) {
+        for (float x = -sampleArea; x <= sampleArea; x++) {
+            vec2 offsetCoord = coord.xy + vec2(x, y) * offset;
+            float currentDepth = coord.z + (u_bias );
+            float projectedDepth = texture(u_projectedTexture, offsetCoord).r;
+            shadow += currentDepth > projectedDepth ? 0.3 : 1.0;
+            samples += 1.0;
+        }
+    }
+
+    shadow = smoothstep(0.2, 0.6, shadow / samples);
+
+    return shadow;
+}
+
 void main() {
   // because v_normal is a varying it's interpolated
   // so it will not be a unit vector. Normalizing it
@@ -84,17 +105,13 @@ void main() {
   float light = dot(normal, u_reverseLightDirection);
 
   vec3 projectedTexcoord = v_projectedTexcoord.xyz / v_projectedTexcoord.w;
-  float currentDepth = projectedTexcoord.z + u_bias;
-
   bool inRange =
       projectedTexcoord.x >= 0.0 &&
       projectedTexcoord.x <= 1.0 &&
       projectedTexcoord.y >= 0.0 &&
       projectedTexcoord.y <= 1.0;
 
-  // the 'r' channel has the depth values
-  float projectedDepth = texture(u_projectedTexture, projectedTexcoord.xy).r;
-  float shadowLight = (inRange && projectedDepth <= currentDepth) ? 0.0 : 1.0;
+  float shadowLight = inRange ? sampleShadow(projectedTexcoord) : 1.0;
 
   vec4 texColor = texture(u_texture, v_texcoord) * u_colorMult;
   outColor = vec4(
